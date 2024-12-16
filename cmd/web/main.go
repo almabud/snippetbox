@@ -7,6 +7,11 @@ import (
 	"os"
 )
 
+type application struct {
+	errorLog *log.Logger
+	infoLog  *log.Logger
+}
+
 func main() {
 	// Define a new command line flag with the name addr, a default value of
 	// :4000 and some short help text explaining what the flag controls.
@@ -18,20 +23,6 @@ func main() {
 	// otherwise ti will always contain the default value. If any errors are
 	// encountered during parsing the application will be terminated.
 	flag.Parse()
-
-	mux := http.NewServeMux()
-
-	// Create a file server which serves files out of the "./ui/static"
-	// directory. This is relative path.
-	fileServer := http.FileServer(http.Dir("./ui/static/"))
-
-	// Use the mux.Handle() function to register the file server as
-	// the handler for all URL paths that start with /static/.
-	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
-
-	mux.Handle("/", &home{})
-	mux.HandleFunc("/snippet/view", snippetView)
-	mux.HandleFunc("/snippet/create", snippetCreate)
 
 	// Use log.New() to create a logger for writing information messages. This takes
 	// three parameters: the destination to write the logs to (os.Stdout), a string
@@ -45,9 +36,40 @@ func main() {
 	// relevant file name and line number.
 	errorLog := log.New(os.Stderr, "Error\t", log.Ldate|log.Ltime|log.Lshortfile)
 
+	// Initialize a new instance of our application struct, containing the
+	// dependencis
+	app := application{
+		errorLog: errorLog,
+		infoLog:  infoLog,
+	}
+
+	mux := http.NewServeMux()
+
+	// Create a file server which serves files out of the "./ui/static"
+	// directory. This is relative path.
+	fileServer := http.FileServer(http.Dir("./ui/static/"))
+
+	// Use the mux.Handle() function to register the file server as
+	// the handler for all URL paths that start with /static/.
+	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
+
+	mux.HandleFunc("/", app.home)
+	mux.HandleFunc("/snippet/view", app.snippetView)
+	mux.HandleFunc("/snippet/create", app.snippetCreate)
+
+	// Initialize a new http.Serveer struct. We set the addr and handler fields
+	// so that the server uses the same network address and routes as before, and ste
+	// the ErrorLog field so that the server now uses the custom errorLog loggeer in
+	// the event of any problem
+	srv := http.Server{
+		Addr:     *addr,
+		ErrorLog: errorLog,
+		Handler:  mux,
+	}
 	// Write  the logg message using the new logger system.
 	infoLog.Printf("Starting server on %s", *addr)
-	err := http.ListenAndServe(*addr, mux)
+	//err := http.ListenAndServe(*addr, mux)
+	err := srv.ListenAndServe()
 	errorLog.Fatal(err)
 	//log.Println("Starting server on ", *addr)
 	//err := http.ListenAndServe(*addr, mux)

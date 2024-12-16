@@ -4,23 +4,15 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 )
 
+type application struct {
+	errorLog *log.Logger
+	infoLog  *log.Logger
+}
+
 func main() {
-	mux := http.NewServeMux()
-
-	// Create a file server which serves files out of the "./ui/static"
-	// directory. This is relative path.
-	fileServer := http.FileServer(http.Dir("./ui/static/"))
-
-	// Use the mux.Handle() function to register the file server as
-	// the handler for all URL paths that start with /static/.
-	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
-
-	mux.Handle("/", &home{})
-	mux.HandleFunc("/snippet/view", snippetView)
-	mux.HandleFunc("/snippet/create", snippetCreate)
-
 	// Define a new command line flag with the name addr, a default value of
 	// :4000 and some short help text explaining what the flag controls.
 	addr := flag.String("addr", ":4000", "HTTP Network Address")
@@ -32,7 +24,56 @@ func main() {
 	// encountered during parsing the application will be terminated.
 	flag.Parse()
 
-	log.Println("Starting server on ", *addr)
-	err := http.ListenAndServe(*addr, mux)
-	log.Fatal(err)
+	// Use log.New() to create a logger for writing information messages. This takes
+	// three parameters: the destination to write the logs to (os.Stdout), a string
+	// prefix for message (INFO followed by a tab), and flags to indicate what
+	// additional information to include (local date and time). Note that the flags
+	// are joined using the bitwise OR operator |.
+	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+
+	// Create a logger for writing error message in the same way, but use
+	// stderr as the destination and use the log.Lshortfile flag to include
+	// relevant file name and line number.
+	errorLog := log.New(os.Stderr, "Error\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+	// Initialize a new instance of our application struct, containing the
+	// dependencis
+	app := application{
+		errorLog: errorLog,
+		infoLog:  infoLog,
+	}
+
+	mux := http.NewServeMux()
+
+	// Create a file server which serves files out of the "./ui/static"
+	// directory. This is relative path.
+	fileServer := http.FileServer(http.Dir("./ui/static/"))
+
+	// Use the mux.Handle() function to register the file server as
+	// the handler for all URL paths that start with /static/.
+	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
+
+	mux.HandleFunc("/", app.home)
+	mux.HandleFunc("/snippet/view", app.snippetView)
+	mux.HandleFunc("/snippet/create", app.snippetCreate)
+
+	// Initialize a new http.Serveer struct. We set the addr and handler fields
+	// so that the server uses the same network address and routes as before, and ste
+	// the ErrorLog field so that the server now uses the custom errorLog loggeer in
+	// the event of any problem
+	srv := http.Server{
+		Addr:     *addr,
+		ErrorLog: errorLog,
+		Handler:  mux,
+	}
+	// Write  the logg message using the new logger system.
+	infoLog.Printf("Starting server on %s", *addr)
+	//err := http.ListenAndServe(*addr, mux)
+	err := srv.ListenAndServe()
+	errorLog.Fatal(err)
+	//log.Println("Starting server on ", *addr)
+	//err := http.ListenAndServe(*addr, mux)
+	//log.Fatal(err)
+	// To save the log into a file you need to run
+	// go run ./cmd/web >>/tmp/info.log 2>>/tmp/error.log
 }

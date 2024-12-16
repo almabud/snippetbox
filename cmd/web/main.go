@@ -16,7 +16,7 @@ func main() {
 	// the handler for all URL paths that start with /static/.
 	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
 
-	mux.HandleFunc("/", home)
+	mux.Handle("/", &home{})
 	mux.HandleFunc("/snippet/view", snippetView)
 	mux.HandleFunc("/snippet/create", snippetCreate)
 
